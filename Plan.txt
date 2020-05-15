@@ -1,0 +1,23 @@
+Arbeitsablauf IBIS Projekt
+
+1. Erinnerung
+Das Programm soll beim Start zunächst ein Login Fenster anzeigen.
+Nach erfolgreichem login soll ein Hauptmenü gezeigt werden.
+Bei einem Admin besteht das Hauptmenü aus
+- Letztes Projekt
+- Wartungsbereich
+- Projekte mit Suchfunktion
+- Neues Projekt
+- Profil
+Bei einem normalen User besteht das Hauptmenü aus
+- Letztes Projekt
+- Projekte mit Suchfunktion
+- Neues Projekt
+- Profil
+
+Ein Projekt besteht aus Hauptanlagen
+Eine Hauptanlage besteht aus Teilanlagen
+Eine Teilanlage besteht aus Behältern
+Ein Behälter besitzt eine komplexe Tabelle
+
+Als erstes entwickele ich einen einfachen Login.

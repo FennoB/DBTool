@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>LoginView.qml</file>
+        <file>MainMenuView.qml</file>
+        <file>ProfileView.qml</file>
+        <file>MaintenanceView.qml</file>
+        <file>../Container.png</file>
+        <file>../Dir.png</file>
+        <file>ExplorerDelegate.qml</file>
+        <file>../sel_closed.png</file>
+        <file>../Dir2.png</file>
+        <file>ProjectExplorer.qml</file>
+        <file>RegisterView.qml</file>
+        <file>EntryEditor.qml</file>
+        <file>TableEditor.qml</file>
+    </qresource>
+</RCC>
