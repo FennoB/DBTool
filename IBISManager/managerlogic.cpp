@@ -1,4 +1,7 @@
 #include "managerlogic.h"
+#include <QDesktopServices>
+#include <QQmlApplicationEngine>
+#include "columnsorter.h"
 #include <qmessagebox.h>
 #include "csvhandler.h"
 
@@ -7,8 +10,16 @@ ManagerLogic::ManagerLogic(QObject *parent)
 {
 }
 
-ManagerLogic::ManagerLogic(QQuickView* v)
+ManagerLogic::ManagerLogic(QQmlApplicationEngine* v)
 {
+  view = v;
+  view->rootContext()->setContextProperty("name", "");
+  view->rootContext()->setContextProperty("fileModel", fileModel);
+  view->rootContext()->setContextProperty("columnFlags", columnFlags);
+  view->rootContext()->setContextProperty("tableColumnFlags", tableColumnFlags);
+  view->rootContext()->setContextProperty("entryDropdowns", entryDropdowns);
+  view->rootContext()->setContextProperty("tableDropdowns", tableDropdowns);
+
   setLoggedIn(false);
   setAdmin(false);
   databaseHandler.initDatabase();
@@ -18,12 +29,10 @@ ManagerLogic::ManagerLogic(QQuickView* v)
   menuEntryOfTable["subsystem"] = "Teilanlage";
   menuEntryOfTable["container"] = QLatin1String("Behälter");
 
-  view = v;
   view->rootContext()->setContextProperty("logic", QVariant::fromValue(this));
   view->rootContext()->setContextProperty("explorerList", QVariant::fromValue(m_explorerList));
 
   setFormtype("");
-  form["name"] = "None";
   form["entry_id"] = 0;
   view->rootContext()->setContextProperty("entryForm", form);
   tableForm.append(QVariantMap());
@@ -37,8 +46,55 @@ bool ManagerLogic::load()
   QList<int> hids;
   databaseHandler.getFullHierarchy(user(), depth, hids);
 
+  int count = 0;
+  int lastDepth = -1;
+  std::vector<int> context;
   for(int i = 0; i < hids.length(); ++i)
   {
+    if (depth[i] == 0)
+    {
+      count++;
+    }
+
+    if (depth[i] != lastDepth)
+    {
+      QString table;
+      QVariantMap base;
+      databaseHandler.getSubEntryBase(hids[i], base);
+      table = base["entry_table"].toString();
+      QStringList flags;
+      databaseHandler.getFlags(table, "*", flags);
+
+      if (depth[i] > lastDepth)
+      {
+        context.push_back(flags.contains("counter") ? 0 : -1);
+        lastDepth = depth[i];
+      }
+      while (depth[i] < lastDepth)
+      {
+        lastDepth--;
+        context.pop_back();
+      }
+    }
+
+    if (context.back() != -1)
+    {
+      context.back()++;
+    }
+
+    QString lfnr;
+    for (size_t j = 0; j < context.size(); ++j)
+    {
+      if (context[j] != -1)
+      {
+        if (lfnr != "")
+        {
+          lfnr += ".";
+        }
+        lfnr += QString::number(context[j]);
+      }
+    }
+
     QVariantMap entry = databaseHandler.getEmptyTable("hierarchy");
     databaseHandler.getEntry("hierarchy", hids[i], entry);
     QString symbol = entry["entry_table"] == "client"
@@ -46,8 +102,17 @@ bool ManagerLogic::load()
           entry["entry_table"] == "container"
           ? "Container" :
             "Dir2";
-    m_explorerList.append(new ExplorerEntry(entry["name"].toString(), symbol, depth[i], true, true, hids[i]));
+    m_explorerList.append(
+          new ExplorerEntry(
+            entry["name"].toString(),
+            symbol,
+            depth[i],
+            true,
+            true,
+            hids[i],
+            lfnr));
   }
+  setClientCount(count);
   view->rootContext()->setContextProperty("explorerList", QVariant::fromValue(m_explorerList));
 
   return true;
@@ -59,35 +124,14 @@ void ManagerLogic::reloadForm()
   databaseHandler.getSubEntryBase(form["entry_hid"].toInt(), base);
   forcedDirection.clear();
   databaseHandler.getForcedDirection(base["entry_table"].toString(), forcedDirection);
+  setClientSelected(base["entry_table"] == "client");
 
-  QStringList model;
-  QStringList tables;
+  fileModel = QVariantList();
+  databaseHandler.getFileList(form["entry_hid"].toInt(), fileModel);
 
-  for (QHash<QString, QString>::iterator i = menuEntryOfTable.begin(); i != menuEntryOfTable.end(); ++i)
-  {
-    tables.append(i.value());
-    if (i.key() == table)
-    {
-      setTableListIndex(tables.count()-1);
-    }
+  reloadMenus();
 
-    if (forcedDirection.count() == 0 || forcedDirection.contains(i.key()))
-    {
-      if(model.empty() && table == "")
-      {
-        table = i.key();
-        setTableListIndex(tables.count()-1);
-      }
-      model.append(i.value());
-    }
-  }
-
-  setMenuModel(model);
-  int buf = tableListIndex();
-  setTableListIndex(0);
-  setTableList(tables);
-  setTableListIndex(buf);
-
+  // Set filter
   QVariantMap base_filter;
   QVariantMap filter;
   QList<QVariant> searchResults;
@@ -107,10 +151,10 @@ void ManagerLogic::reloadForm()
   base_filter["client_id"] = base["client_id"].toInt();
   base_filter["child_of"] = base["id"].toInt();
 
+  // Reload table
+  setSortingColumn("");
   tableForm.clear();
-
   databaseHandler.search(table, base_filter, filter, searchResults);
-
   for (int i = 0; i < searchResults.length(); ++i)
   {
     QVariantMap row = searchResults[i].toMap();
@@ -124,11 +168,94 @@ void ManagerLogic::reloadForm()
   {
     tableForm.append(QVariantMap());
   }
+  else
+  {
+    // Load table flags
+    tableColumnFlags.clear();
+    QVariantMap first = tableForm.front().toMap();
+    for (auto i = first.begin(); i != first.end(); ++i)
+    {
+      QStringList flags;
+      databaseHandler.getFlags(table, i.key(), flags);
+      tableColumnFlags[i.key()] = flags;
+    }
+  }
 
+  // Load main entry flags
+  columnFlags.clear();
+  for (auto i = form.begin(); i != form.end(); ++i)
+  {
+    QStringList flags;
+    databaseHandler.getFlags(base["entry_table"].toString(), i.key(), flags);
+    columnFlags[i.key()] = flags;
+  }
+
+  flags2Dropdown(columnFlags, entryDropdowns);
+  flags2Dropdown(tableColumnFlags, tableDropdowns);
+
+  form["entry_hid"] = base["id"].toInt();
   view->rootContext()->setContextProperty("name", base["name"]);
-  form["entry_hid"] = base["id"];
+  view->rootContext()->setContextProperty("columnFlags", columnFlags);
+  view->rootContext()->setContextProperty("tableColumnFlags", tableColumnFlags);
   view->rootContext()->setContextProperty("entryForm", form);
   view->rootContext()->setContextProperty("tableForm", tableForm);
+  view->rootContext()->setContextProperty("fileModel", fileModel);
+  view->rootContext()->setContextProperty("entryDropdowns", entryDropdowns);
+  view->rootContext()->setContextProperty("tableDropdowns", tableDropdowns);
+}
+
+void ManagerLogic::reloadMenus()
+{
+  QStringList model;
+  QStringList tables;
+
+  for (auto i = menuEntryOfTable.begin(); i != menuEntryOfTable.end(); ++i)
+  {
+    tables.append(i.value());
+    if (i.key() == table)
+    {
+      setTableListIndex(tables.count()-1);
+    }
+
+    if (forcedDirection.count() == 0 || forcedDirection.contains(i.key()))
+    {
+      if(model.empty() && table == "")
+      {
+        table = i.key();
+        setTableListIndex(tables.count()-1);
+      }
+      model.append(i.value());
+    }
+  }
+
+  setMenuModel(model);
+
+  int buf = tableListIndex();
+  setTableListIndex(0);
+  setTableList(tables);
+  setTableListIndex(buf);
+}
+
+void ManagerLogic::flags2Dropdown(QVariantMap &columnFlags, QVariantMap &dropdowns)
+{
+  dropdowns.clear();
+
+  for(auto i = columnFlags.begin(); i != columnFlags.end(); ++i)
+  {
+    QVariantList flags = i.value().toList();
+    for(auto f = flags.begin(); f < flags.end(); ++f)
+    {
+      QString s = f->toString();
+      if (s.contains("dropdown"))
+      {
+        QStringList l = s.split(".");
+        s = l[1];
+        l.clear();
+        databaseHandler.getDropDown(s, l);
+        dropdowns[i.key()] = l;
+      }
+    }
+  }
 }
 
 void ManagerLogic::addClient()
@@ -140,6 +267,66 @@ void ManagerLogic::addClient()
   }
 
   load();
+}
+
+void ManagerLogic::addFile()
+{
+  emit dialog("addfile", QStringList());
+}
+
+void ManagerLogic::addFile(QString url)
+{
+  QVariantMap entry;
+  entry["url"] = url;
+  entry["name"] = "Neuer Anhang";
+  entry["hid"] = form["entry_hid"];
+  databaseHandler.addEntry("files", entry);
+  reloadForm();
+}
+
+void ManagerLogic::setFileName(int index, QString text)
+{
+  QVariantMap entry = fileModel[index].toMap();
+  if (entry["name"].toString() == text)
+  {
+    return;
+  }
+  entry["name"] = text;
+  int id = entry["id"].toInt();
+  entry.remove("id");
+  databaseHandler.setEntry("files", id, entry);
+}
+
+void ManagerLogic::removeFile(int index)
+{
+  QVariantMap entry = fileModel[index].toMap();
+  int id = entry["id"].toInt();
+  databaseHandler.removeEntry("files", id);
+  reloadForm();
+}
+
+void ManagerLogic::openFile(int index)
+{
+  QVariantMap entry = fileModel[index].toMap();
+  QString url = entry["url"].toString();
+  QDesktopServices::openUrl(QUrl::fromLocalFile(url));
+}
+
+void ManagerLogic::removeEntry()
+{
+  QVariantMap base;
+  databaseHandler.getSubEntryBase(form["entry_hid"].toInt(), base);
+
+  if (base["entry_table"].toString() == "client")
+  {
+    databaseHandler.clientRemove(form["id"].toInt());
+  }
+  else
+  {
+    databaseHandler.removeSubEntry(form["entry_hid"].toInt());
+  }
+  load();
+  open(static_cast<ExplorerEntry*>( m_explorerList[0] )->_hid());
 }
 
 void ManagerLogic::menuClicked(int menu_index, QString elem)
@@ -164,33 +351,31 @@ void ManagerLogic::menuClicked(int menu_index, QString elem)
     }
 
     load();
-    table = "";
-    reloadForm();
+    open(form["entry_hid"].toInt());
   }
-
 }
 
 void ManagerLogic::setValue(QString name, QVariant value)
 {
   if (name == "name")
   {
-    QVariantMap base;
-    databaseHandler.getSubEntryBase(form["entry_hid"].toInt(), base);
-    if(base["name"].toString() == value.toString())
-    {
-      return;
-    }
-
-    base["name"] = value.toString();
-    databaseHandler.setSubEntryBase(form["entry_hid"].toInt(), base);
-    //reloadForm();
-    load();
+    entryName = value.toString();
     return;
   }
 
   form[name] = value;
+}
 
+void ManagerLogic::saveEntry()
+{
+  QVariantMap base;
+  databaseHandler.getSubEntryBase(form["entry_hid"].toInt(), base);
+  base["name"] = entryName;
+  databaseHandler.setSubEntryBase(form["entry_hid"].toInt(), base);
+  view->rootContext()->setContextProperty("name", entryName);
   databaseHandler.setSubEntry(form["entry_hid"].toInt(), form);
+  load();
+  reloadForm();
 }
 
 void ManagerLogic::setTableValue(int rowIndex, QString key, QVariant value)
@@ -214,20 +399,26 @@ void ManagerLogic::setTableValue(int rowIndex, QString key, QVariant value)
     return;
   }
 
-  QVariantMap old;
-  databaseHandler.getSubEntry(row["entry_hid"].toInt(), old);
+  QVariantMap buf = row;
+  //databaseHandler.getSubEntry(row["entry_hid"].toInt(), buf);
 
-  if (old[key] == value)
+  if (buf[key] == value)
   {
     return;
   }
 
-  row.remove("__000_name");
   row[key] = value;
+  buf = row;
+  buf.remove("__000_name");
 
-  databaseHandler.setSubEntry(row["entry_hid"].toInt(), row);
+  databaseHandler.setSubEntry(row["entry_hid"].toInt(), buf);
   databaseHandler.getSubEntry(form["entry_hid"].toInt(), form);
-  reloadForm();
+  tableForm[rowIndex] = row;
+
+  view->rootContext()->setContextProperty("tableForm", tableForm);
+  view->rootContext()->setContextProperty("entryForm", form);
+
+  //reloadForm();
 }
 
 bool ManagerLogic::login(QString email, QString password)
@@ -342,7 +533,7 @@ void ManagerLogic::csvSubentriesImport(QString path)
   csvHandler h;
   if (!h.beginReadFile(path, ','))
   {
-    emit messageBox("error", {"Error!", "Datei konnte nicht geladen werden."});
+    emit dialog("error", {"Error!", "Datei konnte nicht geladen werden."});
     return;
   }
 
@@ -368,7 +559,7 @@ void ManagerLogic::csvSubentriesImport(QString path)
       entry.remove("name");
       if(!databaseHandler.addSubEntry(table, entry, name == "" ? "[importiert]" : name , parent_hid, pid))
       {
-        emit messageBox("error", {"Error!", "Einige Einträge konnten nicht importiert werden. "});
+        emit dialog("error", {"Error!", "Einige Einträge konnten nicht importiert werden. "});
       }
       entry = databaseHandler.getEmptyTable(table);
       entry["name"] = "";
@@ -391,7 +582,7 @@ void ManagerLogic::csvSubentriesImport(QString path)
       }
     }
 
-    emit messageBox("error", {"Error!", message});
+    emit dialog("error", {"Error!", message});
   }
 
   h.endReadFile();
@@ -416,6 +607,21 @@ QDateTime ManagerLogic::fromGermanDateTime(QString text, QString param)
   return QDateTime::fromString(text, format);
 }
 
+QString ManagerLogic::beautifyColumnName(QString column)
+{
+  QString res = column.mid(6, column.length());
+  QStringList parts = res.split("_");
+  res = "";
+  for (auto i = parts.begin(); i != parts.end(); ++i)
+  {
+    if (i->size())
+    {
+      res += i->left(1).toUpper() + i->mid(1) + " ";
+    }
+  }
+  return res;
+}
+
 void ManagerLogic::search(QString text, QString column)
 {
   if (text != filter() || column != searchColumn || (text == "" && column == ""))
@@ -424,4 +630,27 @@ void ManagerLogic::search(QString text, QString column)
     searchColumn = column;
     reloadForm();
   }
+}
+
+void ManagerLogic::sort(QString column)
+{
+  if (sortingColumn() == "")
+  {
+    setSortingDescending(true);
+  }
+  else if (sortingColumn() == column)
+  {
+    if (!sortingDescending())
+    {
+      reloadForm();
+      return;
+    }
+    else
+    {
+      setSortingDescending(false);
+    }
+  }
+  setSortingColumn(column);
+  ColumnSorter::sort(tableForm, sortingColumn(), sortingDescending());
+  view->rootContext()->setContextProperty("tableForm", tableForm);
 }

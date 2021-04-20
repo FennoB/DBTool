@@ -8,7 +8,7 @@ Item
     anchors.leftMargin: parent.width / 5
     anchors.rightMargin: parent.width / 5
 
-    signal register()
+    signal close()
 
     property bool success: false
 
@@ -29,6 +29,7 @@ Item
         anchors.topMargin: 100
 
         text: "Neuen Benutzer registrieren"
+        color: "white"
         font.pixelSize: 20
     }
 
@@ -79,7 +80,8 @@ Item
     {
         id: regButton
 
-        text: success ? "Schließen" : "Registrieren"
+        text: "Registrieren"
+        enabled: !success
 
         anchors.top: regFieldPassword.bottom
         anchors.topMargin: 30
@@ -87,11 +89,6 @@ Item
 
         onClicked:
         {
-            if(success)
-            {
-                register()
-            }
-
             if(!regFieldUsername.acceptableInput || regFieldUsername.text == "")
             {
                 regLabel.text = "Bitte geben sie eine korrekte E-Mail Adresse ein."
@@ -119,4 +116,16 @@ Item
             }
         }
     }
+
+    Button
+    {
+      id: closeButton
+      onClicked: close()
+      text: "Schließen"
+
+      anchors.left: regButton.right
+      anchors.margins: 50
+      anchors.verticalCenter: regButton.verticalCenter
+    }
+
 }

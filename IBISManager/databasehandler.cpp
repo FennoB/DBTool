@@ -30,6 +30,7 @@ DatabaseHandler::DatabaseHandler()
   tableBlueprints["files"]["id"] = QVariant::Int;
   tableBlueprints["files"]["hid"] = QVariant::Int;
   tableBlueprints["files"]["url"] = QVariant::String;
+  tableBlueprints["files"]["name"] = QVariant::String;
 
   tableBlueprints["column_flag"] = QVariantMap();
   tableBlueprints["column_flag"]["id"] = QVariant::Int;
@@ -119,9 +120,15 @@ DatabaseHandler::DatabaseHandler()
   //tableBlueprints["seperator"]["AbschlussBemerkungen"                 ] = QVariant::String;
 }
 
+void DatabaseHandler::close()
+{
+  db.close();
+  metadb.close();
+}
+
 bool DatabaseHandler::initDatabase()
 {
-  QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+  db = QSqlDatabase::addDatabase("QSQLITE");
   db.setDatabaseName("ibis_db.sqlite3");
 
   if(!db.open())
@@ -157,9 +164,9 @@ bool DatabaseHandler::initDatabase()
   if(result)
   {
     // Add Dummy data
-    userRegister("frodo", "frodo");
+    userRegister("admin", "admin");
     int pid;
-    clientCreate("Ein Kunde", {"frodo"}, pid);
+    clientCreate("Ein Kunde", {"admin"}, pid);
 
     //QVariantMap system = tableBlueprints["system"];
     //addSubEntry("system", system, "System1", 0, pid);
@@ -189,7 +196,7 @@ bool DatabaseHandler::initDatabase()
 
 bool DatabaseHandler::initMetaDatabase()
 {
-  QSqlDatabase metadb = QSqlDatabase::addDatabase("QSQLITE", "ibis_meta");
+  metadb = QSqlDatabase::addDatabase("QSQLITE", "ibis_meta");
   metadb.setDatabaseName("ibis_meta.sqlite3");
   metadb.setHostName("localhost");
 
@@ -207,10 +214,51 @@ bool DatabaseHandler::initMetaDatabase()
   // Check if Meta-Database empty
   if(!metaQuery.exec("SELECT * FROM metacode"))
   {
-    metaQuery.exec("CREATE TABLE metacode (name TEXT PRIMARY KEY, getter TEXT, setter TEXT)");
+    metaQuery.exec("CREATE TABLE metacode (name TEXT PRIMARY KEY, script_sql TEXT)");
     metaQuery.exec("CREATE TABLE blueprint (table_name TEXT, column_name TEXT, \
                 variant_type INT, def_value TEXT, PRIMARY KEY(table_name, column_name))");
+    metaQuery.exec("CREATE TABLE dropdowns (name TEXT, entry TEXT, PRIMARY KEY(name, entry))");
+    metaQuery.exec("CREATE TABLE binding (from_table, from_column, to_table, PRIMARY KEY(from_table, from_column, to_table))");
   }
+  return true;
+}
+
+bool DatabaseHandler::removeAllDatabases()
+{
+  system("del /s ibis_db.sqlite3");
+  system("del /s ibis_meta.sqlite3");
+  return false;
+}
+
+bool DatabaseHandler::addDropDown(QString name, QList<QString> entries)
+{
+  bool res = true;
+  for (auto i = entries.begin(); i != entries.end(); ++i)
+  {
+    metaQuery.prepare("INSERT INTO dropdowns(name, entry) VALUES(?, ?)");
+    metaQuery.addBindValue(name);
+    metaQuery.addBindValue(*i);
+    res &= metaQuery.exec();
+  }
+
+  return res;
+}
+
+bool DatabaseHandler::getDropDown(QString name, QList<QString> &entries)
+{
+  bool res;
+  metaQuery.prepare("SELECT * FROM dropdowns WHERE name = ?");
+  metaQuery.addBindValue(name);
+  if((res = metaQuery.exec()) && metaQuery.first())
+  {
+    do
+    {
+      entries.append(metaQuery.value("entry").toString());
+    }
+    while(metaQuery.next());
+  }
+
+  return res;
 }
 
 bool DatabaseHandler::blueprintAdd(QString table, QString column, QVariant::Type type, QVariant def)
@@ -233,6 +281,7 @@ bool DatabaseHandler::flagAdd(QString table, QString column, QStringList flags)
     entry["flag"] = flags[i];
     addEntry("column_flag", entry);
   }
+  return true;
 }
 
 bool DatabaseHandler::blueprintRemove(QString table, QString column)
@@ -252,20 +301,18 @@ bool DatabaseHandler::blueprintSetDefault(QString table, QString column, QVarian
   return metaQuery.exec();
 }
 
-bool DatabaseHandler::metaAdd(QString meta, QString getter_sql, QString setter_sql)
+bool DatabaseHandler::metaAdd(QString meta, QString script_sql)
 {
-  metaQuery.prepare("INSERT INTO metacode(name, getter, setter) VALUES(?, ?, ?)");
+  metaQuery.prepare("INSERT INTO metacode(name, script_sql) VALUES(?, ?)");
   metaQuery.addBindValue(meta);
-  metaQuery.addBindValue(getter_sql);
-  metaQuery.addBindValue(setter_sql);
+  metaQuery.addBindValue(script_sql);
   return metaQuery.exec();
 }
 
-bool DatabaseHandler::metaSet(QString meta, QString getter_sql, QString setter_sql)
+bool DatabaseHandler::metaSet(QString meta, QString script_sql)
 {
-  metaQuery.prepare("UPDATE metacode SET getter = ?, setter = ? WHERE name = ?");
-  metaQuery.addBindValue(getter_sql);
-  metaQuery.addBindValue(setter_sql);
+  metaQuery.prepare("UPDATE metacode SET script_sql = ? WHERE name = ?");
+  metaQuery.addBindValue(script_sql);
   metaQuery.addBindValue(meta);
   return metaQuery.exec();
 }
@@ -277,48 +324,34 @@ bool DatabaseHandler::metaRemove(QString meta)
   return metaQuery.exec();
 }
 
-QVariant DatabaseHandler::callMetaGetter(QString meta, QString column, QVariantMap makros)
+bool DatabaseHandler::callMeta(QString meta, QVariantMap makros)
 {
   metaQuery.prepare("SELECT * FROM metacode WHERE name = ?");
   metaQuery.addBindValue(meta);
   if(metaQuery.exec() && metaQuery.first())
   {
-    QString sql = metaQuery.value("getter").toString();
-    query.prepare(sql);
-    for (QVariantMap::iterator i = makros.begin(); i != makros.end(); ++i)
+    QString sql = metaQuery.value("script_sql").toString();
+    QStringList statements = sql.split(";");
+    bool res = true;
+    for (int s = 0; s < statements.length(); ++s)
     {
-      query.bindValue(i.key(), i.value());
+      if (statements[s].trimmed().isEmpty())
+      {
+        continue;
+      }
+      query.prepare(statements[s]);
+      for (QVariantMap::iterator i = makros.begin(); i != makros.end(); ++i)
+      {
+        query.bindValue(i.key(), i.value());
+      }
+      res = res && query.exec();
     }
-
-    query.exec();
-    if(query.first())
-    {
-      QVariant result = query.value(0);
-      return result;
-    }
+    return res;
   }
-
-  return "";
+  return false;
 }
 
-bool DatabaseHandler::callMetaSetter(QString meta, QString column, QVariant value, QVariantMap makros)
-{
-  metaQuery.prepare("SELECT * FROM metacode WHERE name = ?");
-  metaQuery.addBindValue(meta);
-  if(metaQuery.exec() && metaQuery.first())
-  {
-    QString sql = query.value("setter").toString();
-    metaQuery.prepare(sql);
-    for (QVariantMap::iterator i = makros.begin(); i != makros.end(); ++i)
-    {
-      metaQuery.bindValue(i.key(), i.value());
-    }
-
-    return metaQuery.exec();
-  }
-}
-
-bool DatabaseHandler::getColumnFlags(QString table, QString column, QStringList &flags)
+bool DatabaseHandler::getFlags(QString table, QString column, QStringList &flags)
 {
   QString sql = "SELECT flag FROM column_flag WHERE entry_table = ? AND entry_column = ?";
   query.prepare(sql);
@@ -332,11 +365,155 @@ bool DatabaseHandler::getColumnFlags(QString table, QString column, QStringList 
       do
       {
         flags.append(query.value(0).toString());
-      } while(query.next());
+      }
+      while(query.next());
     }
   }
 
   return result;
+}
+
+bool DatabaseHandler::addBinding(QString from_table, QString from_column, QString to_table)
+{
+  metaQuery.prepare("INSERT INTO binding(from_table, from_column, to_table) VALUES(?, ?, ?)");
+  metaQuery.addBindValue(from_table);
+  metaQuery.addBindValue(from_column);
+  metaQuery.addBindValue(to_table);
+  return metaQuery.exec();
+}
+
+bool DatabaseHandler::removeBinding(QString from_table, QString from_column, QString to_table)
+{
+  metaQuery.prepare("DELETE FROM binding WHERE from_table = ? AND from_column = ? AND to_table = ?");
+  metaQuery.addBindValue(from_table);
+  metaQuery.addBindValue(from_column);
+  metaQuery.addBindValue(to_table);
+  return metaQuery.exec();
+}
+
+bool DatabaseHandler::getBindings(QString from_table, QString from_column, QStringList &to_tables)
+{
+  metaQuery.prepare("SELECT to_table FROM binding WHERE from_table = ? AND from_column = ?");
+  metaQuery.addBindValue(from_table);
+  metaQuery.addBindValue(from_column);
+
+  if(metaQuery.exec())
+  {
+    if (metaQuery.first())
+    {
+      do
+      {
+        to_tables.append(metaQuery.value(0).toString());
+      }
+      while(metaQuery.next());
+    }
+    return true;
+  }
+  return false;
+}
+
+bool DatabaseHandler::getRelatedEntries(int hid, QMap<QString, QList<int>> &related)
+{
+  if (related.empty())
+  {
+    QVariantMap base;
+    int next = hid;
+    while (next)
+    {
+      base.clear();
+      getSubEntryBase(next, base);
+      related[base["entry_table"].toString()].append(next);
+      next = base["parent_hid"].toInt();
+    }
+  }
+
+  query.prepare("SELECT id, entry_table FROM hierarchy WHERE parent_hid = ?");
+  query.addBindValue(hid);
+  if(!query.exec())
+  {
+    return false;
+  }
+
+  QList<int> results;
+  QList<QString> tresults;
+  if(query.first())
+  {
+    do
+    {
+      results.append(query.value("id").toInt());
+      tresults.append(query.value("entry_table").toString());
+    }
+    while(query.next());
+  }
+
+  bool r = true;
+
+  for(int i = 0; i < results.size(); ++i)
+  {
+    if (!related.contains(tresults[i]))
+    {
+      related[tresults[i]] = QList<int>();
+    }
+    related[tresults[i]].append(results[i]);
+    r = r && getRelatedEntries(results[i], related);
+  }
+
+  return r;
+}
+
+bool DatabaseHandler::resolveBindings(int hid, QString table, QStringList changedColumns)
+{
+  QVariantMap h_entry;
+  getSubEntryBase(hid, h_entry);
+
+  // Find related entries in the hierarchy
+  QMap<QString, QList<int>> related;
+  getRelatedEntries(hid, related);
+
+  // Resolve binding for each changed column
+  for (auto i = changedColumns.begin(); i != changedColumns.end(); ++i)
+  {
+    QStringList tables;
+    getBindings(table, *i, tables);
+
+    for (auto t = tables.begin(); t != tables.end(); ++t)
+    {
+      if (!related.contains(*t))
+      {
+        continue;
+      }
+
+      QList<int> tableHids = related[*t];
+      for (auto r = tableHids.begin(); r != tableHids.end(); ++r)
+      {
+        QVariantMap makros;
+        makros[":hid"] = *r;
+
+
+        QVariantMap old;
+        getSubEntry(*r, old);
+
+        if(callMeta(*t, makros))
+        {
+          QVariantMap changed;
+          getSubEntry(*r, changed);
+
+          QStringList updated;
+          for (auto i = changed.begin(); i != changed.end(); ++i)
+          {
+            if (i.value() != old[i.key()])
+            {
+              updated.append(i.key());
+            }
+          }
+
+          resolveBindings(*r, *t, updated);
+        }
+      }
+    }
+  }
+
+  return true;
 }
 
 bool DatabaseHandler::userLogin(QString username, QString password)
@@ -383,7 +560,8 @@ bool DatabaseHandler::getUserList(QList<QString> &user_list)
     do
     {
       user_list.append(query.value(0).toString());
-    } while(query.next());
+    }
+    while(query.next());
     return true;
   }
 
@@ -763,23 +941,7 @@ bool DatabaseHandler::getSubEntry(int hid, QVariantMap &entry)
   getSubEntryBase(hid, h_entry);
   QString table = h_entry["entry_table"].toString();
   entry = getEmptyTable(table);
-
   bool res = getEntry(table, h_entry["entry_id"].toInt(), entry);
-  for (QVariantMap::iterator i = entry.begin(); i != entry.end(); ++i)
-  {
-    QStringList flags;
-    getColumnFlags(table, i.key(), flags);
-    for(int f = 0; f < flags.count(); ++f)
-    {
-      if (flags[f] == "function")
-      {
-        QVariantMap makros = QVariantMap();
-        makros[":hid"] = hid;
-        entry[i.key()] = callMetaGetter(i.value().toString(), i.key(), makros);
-      }
-    }
-  }
-
   return res;
 }
 
@@ -788,24 +950,23 @@ bool DatabaseHandler::setSubEntry(int hid, QVariantMap entry)
   QVariantMap h_entry;
   getSubEntryBase(hid, h_entry);
   QString table = h_entry["entry_table"].toString();
+  QVariantMap oldEntry = getEmptyTable(table);
+  getEntry(table, h_entry["entry_id"].toInt(), oldEntry);
 
-  for (QVariantMap::iterator i = entry.begin(); i != entry.end(); ++i)
+  QStringList updated;
+  for (auto i = entry.begin(); i != entry.end(); ++i)
   {
-    QStringList flags;
-    getColumnFlags(table, i.key(), flags);
-    for(int f = 0; f < flags.count(); ++f)
+    if (i.value() != oldEntry[i.key()])
     {
-      if (flags[f] == "function")
-      {
-        //QVariantMap makros = QVariantMap();
-        //makros[":hid"] = hid;
-        //entry[i.key()] = callMetaSetter(i.value().toString(), i.key(), makros);
-        entry.remove(i.key());
-      }
+      updated.append(i.key());
     }
   }
 
-  return setEntry(table, h_entry["entry_id"].toInt(), entry);
+  if(!setEntry(table, h_entry["entry_id"].toInt(), entry))
+  {
+    return false;
+  }
+  return resolveBindings(hid, table, updated);
 }
 
 bool DatabaseHandler::getSubEntryBase(int hid, QVariantMap &base)
@@ -979,6 +1140,32 @@ bool DatabaseHandler::search(QString table, QVariantMap base_filter, QVariantMap
   return true;
 }
 
+bool DatabaseHandler::getFileList(int hid, QVariantList &fileList)
+{
+  QString sql = "SELECT * FROM files WHERE hid = ?";
+
+  query.prepare(sql);
+  query.addBindValue(hid);
+  if (query.exec())
+  {
+    if (query.first())
+    {
+      do
+      {
+        QVariantMap entry;
+        entry["name"] = query.value("name");
+        entry["id"] = query.value("id");
+        entry["url"] = query.value("url");
+        fileList.append(entry);
+      }
+      while (query.next());
+    }
+
+    return true;
+  }
+  return false;
+}
+
 QString DatabaseHandler::detectTable(QStringList columns)
 {
   int max = 0;
@@ -1013,6 +1200,7 @@ bool DatabaseHandler::setForcedDirection(QString parent, QString child)
     forcedDirection["parent"] = parent;
     forcedDirection["child"] = child;
     addEntry("forced_direction", forcedDirection);
+    return true;
 }
 
   // Old System

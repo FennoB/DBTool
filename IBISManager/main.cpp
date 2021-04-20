@@ -1,18 +1,25 @@
 #include "managerlogic.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QQmlApplicationEngine>
-#include <QQuickView>
-#include <QQmlContext>
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
-
-    QQuickView *view = new QQuickView;
-
-    ManagerLogic logic(view);
-    view->setSource(QUrl(QStringLiteral("qrc:/main.qml")));
-
+    QGuiApplication app(argc, argv);
+    QQmlApplicationEngine engine;
+    ManagerLogic logic(&engine);
+    engine.load("qrc:/main.qml");
     return app.exec();
 }
+
+//int main(int argc, char *argv[])
+//{
+//    QApplication app(argc, argv);
+//
+//    QQuickView *view = new QQuickView;
+//
+//    ManagerLogic logic(view);
+//    view->setSource(QUrl(QStringLiteral("qrc:/main.qml")));
+//
+//    return app.exec();
+//}

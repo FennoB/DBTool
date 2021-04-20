@@ -8,87 +8,190 @@ Rectangle
   implicitWidth: 100
   border.color: "#333333"
   border.width: 3
-  radius: 5
-  color: "white"
+  color: "#FFFFFF" //"#88FFAA"
+
+  function hiddenField(field)
+  {
+    return field === "entry_hid" || field === "id" || field.includes("color")
+  }
 
   property var model: null
+  property bool editing: false
+  onModelChanged:
+  {
+    list.model = 0
+    list.model = Object.keys(editor.model).length+1
+    editing = false
+  }
+
+  Button
+  {
+    id: b_edit
+    text: editing ? "Speichern" : "Bearbeiten"
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.margins: 20
+    height: 30
+    font.pixelSize: 16
+
+    onClicked:
+    {
+      if (editing)
+      {
+        logic.saveEntry()
+      }
+      else
+      {
+        editing = !editing
+      }
+    }
+  }
+
+  Button
+  {
+    id: b_abort
+    text: "Verwerfen"
+    visible: editing
+    anchors.left: b_edit.right
+    anchors.top: parent.top
+    anchors.margins: 20
+    height: 30
+    font.pixelSize: 16
+
+    onClicked:
+    {
+      if (editor.editing)
+      {
+        editor.editing = false
+        logic.open(editor.model["entry_hid"])
+      }
+    }
+  }
+
 
   ListView
   {
     id: list
     model: Object.keys(editor.model).length+1
 
-    anchors.top: parent.top
+    anchors.top: b_edit.bottom
     anchors.left: parent.left
     anchors.bottom: parent.bottom
-    width: parent.width / 2
-    anchors.margins: 30
+    width: parent.width / 2.5
+    anchors.margins: 20
 
-    spacing: 10
+    spacing: 5
+
     clip: true
 
-    delegate: Row
+    delegate: Item
     {
-      property bool isDate: index == 0 ? false : (Object.prototype.toString.call(editor.model[Object.keys(editor.model)[index-1]]) === '[object Date]')
-      property string type: index == 0 ? "string" : isDate ? "date" : typeof( editor.model[Object.keys(editor.model)[index-1]])
-
-      Text
+      height: 32
+      Row
       {
-        id: txt
-        property string raw: index == 0 ? "__000_Name" : Object.keys(editor.model)[index-1]
-        text: raw.substring(6, raw.length)
-        font.family: "Roboto"
-        font.pixelSize: 18
-        width: 200
-        visible: raw != "id" && raw != "entry_hid"
-      }
+        anchors.verticalCenter: parent.verticalCenter
+        id: rw
+        property string key: index == 0 ? "__000_Name" : Object.keys(editor.model)[index-1]
+        property var content: index == 0 ? name : editor.model[key]
+        property bool isDate: Object.prototype.toString.call(content) === '[object Date]'
+        property string text: isDate ? logic.toGermanDateTime(content, "date") : content
+        property string type: isDate ? "date" : typeof(content)
+        property bool changeable: editor.editing && !(key in columnFlags && columnFlags[key].indexOf("function") > -1)
 
-      TextField
-      {
-        font.family: "Roboto"
-        font.pixelSize: 16
-        text: index == 0 ? name : editor.model[Object.keys(editor.model)[index-1]]
-        onTextChanged:
+        Text
         {
-          logic.setValue(index == 0 ? "name" : Object.keys(editor.model)[index-1], text)
+          id: txt
+          text: logic.beautifyColumnName(rw.key)
+          font.family: "Roboto"
+          font.pixelSize: 14
+          width: 100
+          visible: !hiddenField(rw.key)
         }
 
-        visible: txt.visible && parent.type === "string"
-      }
-
-      TextField
-      {
-        font.family: "Roboto"
-        font.pixelSize: 16
-        text: index == 0 ? name : editor.model[Object.keys(editor.model)[index-1]]
-        onTextChanged:
+        Rectangle
         {
-          logic.setValue(index == 0 ? "name" : Object.keys(editor.model)[index-1], text)
+          width: 300
+          height: 30
+          border.color: "darkgrey"
+          color: "lightgrey"
+          Text
+          {
+            id: greytext
+            font.family: "Roboto"
+            font.pixelSize: 12
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.margins: 10
+            text: rw.text
+          }
+          visible: txt.visible && !parent.changeable
         }
 
-        validator: DoubleValidator
+        TextField
         {
+          font.family: "Roboto"
+          font.pixelSize: 12
+          width: 300
+          height: 30
+          property string content: rw.text
+          text: content
+          onContentChanged: text = content
+          onTextChanged:
+          {
+            if (visible)
+            {
+              logic.setValue(index == 0 ? "name" : rw.key, parent.isDate ? logic.fromGermanDateTime(text, "date") : text)
+            }
+          }
+          onVisibleChanged:
+          {
+              logic.setValue(index == 0 ? "name" : rw.key, parent.isDate ? logic.fromGermanDateTime(text, "date") : text)
+          }
 
+          property var dval: DoubleValidator
+          {
+
+          }
+
+          property var dtval: RegExpValidator
+          {
+            regExp: /[0-9.]+/
+          }
+
+          validator: parent.type === "number" ? dval : parent.isDate ? dtval : null
+
+          visible: txt.visible && !combo.visible && parent.changeable
         }
 
-        visible: txt.visible && parent.type === "number"
-      }
-
-      TextField
-      {
-        font.family: "Roboto"
-        font.pixelSize: 16
-        text: !visible ? "" : index == 0 ? name : logic.toGermanDateTime(editor.model[Object.keys(editor.model)[index-1]], "date")
-        onTextChanged:
+        ComboBox
         {
-          logic.setValue(index == 0 ? "name" : Object.keys(editor.model)[index-1], logic.fromGermanDateTime(text, "date"))
-        }
+          id: combo
+          font.family: "Roboto"
+          font.pixelSize: 12
+          width: 300
+          height: 30
 
-        validator: RegExpValidator {
-          regExp: /^\s*(3[01]|[12][0-9]|0?[1-9])\.(1[012]|0?[1-9])\.((?:19|20)\d{2})\s*$/
-        }
+          visible: entryDropdowns[rw.key] !== undefined && entryDropdowns[rw.key] !== null && parent.changeable
 
-        visible: txt.visible && parent.type === "date"
+          model: !visible ? 0 : entryDropdowns[rw.key]
+          property int content: !visible ? 0 : model.indexOf(rw.content)
+
+          onCurrentIndexChanged:
+          {
+            if (visible)
+            {
+              logic.setValue(rw.key, model[currentIndex])
+            }
+          }
+
+          onContentChanged:
+          {
+            if (visible && currentIndex !== content)
+            {
+              currentIndex = content
+            }
+          }
+        }
       }
     }
   }
@@ -106,7 +209,7 @@ Rectangle
     Text
     {
       id: fileListDesc
-      font.pixelSize: 25
+      font.pixelSize: 16
       text: "Hinterlegte Dateien: "
     }
 
@@ -114,6 +217,10 @@ Rectangle
     {
       anchors.verticalCenter: fileListDesc.verticalCenter
       text: "Hinzufügen"
+      font.pixelSize: 16
+      height: 30
+
+      onClicked: logic.addFile()
     }
   }
 
@@ -125,10 +232,8 @@ Rectangle
     anchors.bottom: parent.bottom
     anchors.right: parent.right
     anchors.margins: 20
-    //model: logic.fileModel
+    model: fileModel
     spacing: 10
-
-    model: 5
 
     delegate: Row
     {
@@ -137,17 +242,23 @@ Rectangle
       Button
       {
         text: "Öffnen"
+        height: 30
+        onClicked: logic.openFile(index)
       }
 
       Button
       {
         text: "Entfernen"
+        height: 30
+        onClicked: logic.removeFile(index)
       }
 
-      Text
+      TextField
       {
-        text: "Datei" + index + ".pdf" //model[index]
-        font.pixelSize: 20
+        text: modelData.name
+        height: 30
+        onTextChanged: logic.setFileName(index, text)
+        font.pixelSize: 16
       }
     }
   }

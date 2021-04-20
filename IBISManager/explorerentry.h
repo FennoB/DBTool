@@ -13,6 +13,7 @@ class ExplorerEntry : public QObject
   Q_PROPERTY(int _layer READ _layer WRITE setLayer NOTIFY layerChanged)
   Q_PROPERTY(bool _visible READ _visible WRITE setVisible NOTIFY visibleChanged)
   Q_PROPERTY(bool _open READ _open WRITE setOpen NOTIFY openChanged)
+  Q_PROPERTY(QString _lfnr READ _lfnr NOTIFY lfnrChanged)
 
   QString m_text;
 
@@ -25,6 +26,8 @@ class ExplorerEntry : public QObject
   bool m_open;
 
   int m_hid;
+
+  QString m_lfnr;
 
 public:
 
@@ -40,7 +43,7 @@ public:
 
   }
 
-  ExplorerEntry(QString text, QString symbolSource, int layer, bool visible, bool open, int hid)
+  ExplorerEntry(QString text, QString symbolSource, int layer, bool visible, bool open, int hid, QString lfnr)
   {
     m_text = text;
     m_source = symbolSource;
@@ -48,6 +51,7 @@ public:
     m_visible = visible;
     m_open = open;
     m_hid = hid;
+    m_lfnr = lfnr;
   }
   virtual ~ExplorerEntry() {}
   QString _text() const
@@ -77,6 +81,11 @@ public:
   int _hid() const
   {
     return m_hid;
+  }
+
+  QString _lfnr() const
+  {
+    return m_lfnr;
   }
 
 public slots:
@@ -141,6 +150,7 @@ signals:
   void visibleChanged(bool visible);
   void openChanged(bool open);
   void hidChanged(int hid);
+  void lfnrChanged(QString _lfnr);
 };
 
 

@@ -8,13 +8,17 @@ Rectangle
   implicitWidth: 100
   border.color: "#333333"
   border.width: 3
-  radius: 5
   color: "white"
 
   property var model: null
 
   property int cellWidth: 150
   property int cellHeight: 30
+
+  function hiddenField(field)
+  {
+    return field === "entry_hid" || field === "id" || field.includes("color")
+  }
 
   Text
   {
@@ -67,9 +71,9 @@ Rectangle
     for (var i = 0; i < model.length; ++i)
     {
       var raw = model[i]
-      if(raw !== "id" && raw !== "entry_hid")
+      if (!hiddenField(raw))
       {
-        result.push(raw.substring(6, raw.length))
+        result.push(logic.beautifyColumnName(raw))
       }
     }
 
@@ -112,125 +116,225 @@ Rectangle
     }
   }
 
-  Flickable
+  Rectangle
   {
     anchors.top: search.bottom
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    anchors.margins: 30
+    anchors.margins: 20
 
+    border.color: "#aaaaaa"
+    border.width: 1
+    color: "#00000000"
 
-    contentWidth: col.width
-    contentHeight: col.height
-    clip: true
-
-    Column
+    Flickable
     {
-      id: col
-      Row
+      id: flicky
+      anchors.fill: parent
+      anchors.margins: 5
+
+      contentWidth: col.width
+      contentHeight: col.height
+      clip: true
+
+      property int editRow: -1
+      property string editKey: ""
+
+
+      //MouseArea
+      //{
+      //  anchors.fill: parent
+      //  onPressed:
+      //  {
+      //    var keys = 0
+      //    for (var i = 0; i < Object.keys(editor.model[0]).length; ++i)
+      //    {
+      //      if (!hiddenField(Object.keys(editor.model[0])[i]))
+      //      {
+      //        ++keys;
+      //      }
+      //    }
+      //
+      //    var clickrow = Math.floor(((mouseY - textrow.height) / (height - textrow.height)) * editor.model.length)
+      //    var clickcol = Math.floor((mouseX / width) * keys)
+      //
+      //    flicky.editKey = Object.keys(editor.model[0])[clickcol]
+      //    while (hiddenField(flicky.editKey))
+      //    {
+      //      clickcol++
+      //      if (clickcol >= Object.keys(editor.model[0]).length)
+      //      {
+      //        flicky.editKey = ""
+      //        flicky.editRow = -1
+      //        return
+      //      }
+      //
+      //      flicky.editKey = Object.keys(editor.model[0])[clickcol]
+      //    }
+      //
+      //    flicky.editRow = clickrow
+      //  }
+      //}
+
+      Column
       {
-        Repeater
-        {
-          id: names_rep
-          model: Object.keys(editor.model[0]).length
-
-          delegate: Item
-          {
-            width: editor.cellWidth
-            height: editor.cellHeight
-            Text
-            {
-              id: txt_name
-              property string raw: Object.keys(editor.model[0])[index]
-              text: raw.substring(6, raw.length)
-              font.family: "Roboto"
-              font.pixelSize: 18
-              width: editor.cellWidth
-              height: editor.cellHeight
-              fontSizeMode: Text.Fit
-
-              anchors.centerIn: parent
-              verticalAlignment: Text.AlignVCenter
-              horizontalAlignment: Text.AlignHCenter
-            }
-            visible: txt_name.raw != "id" && txt_name.raw != "entry_hid"
-          }
-        }
-      }
-
-      Repeater
-      {
-        id: rows_rep
-        model: editor.model.length
-
+        id: col
+        spacing: 0
         Row
         {
-          id: row
-          property int rowIndex: index
+          id: textrow
+          spacing: 2
           Repeater
           {
-            id: cols_rep
-            model: editor.model[0]["entry_hid"] > 0 ? Object.keys(editor.model[0]).length : 0
+            id: names_rep
+            model: Object.keys(editor.model[0]).length
 
             delegate: Item
             {
-              property string key: Object.keys(editor.model[0])[index]
-              property bool isDate: (Object.prototype.toString.call(editor.model[row.rowIndex][key]) === '[object Date]')
-              property string type: isDate ? "date" : typeof( editor.model[row.rowIndex][key] )
-              visible: key != "id" && key != "entry_hid"
               width: editor.cellWidth
               height: editor.cellHeight
-
-              TextField
+              Text
               {
-                anchors.fill: parent
+                id: txt_name
+                property string raw: Object.keys(editor.model[0])[index]
+                text: logic.beautifyColumnName(raw)
                 font.family: "Roboto"
-                font.pixelSize: 16
-                text: editor.model[row.rowIndex][key]
-                onTextChanged:
-                {
-                  logic.setTableValue(row.rowIndex, key, text)
-                }
+                font.pixelSize: 18
+                width: editor.cellWidth
+                height: editor.cellHeight
+                fontSizeMode: Text.Fit
+                //color: "white"
 
-                visible: parent.type === "string"
+                verticalAlignment: Text.AlignVCenter
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.leftMargin: 5
+                MouseArea
+                {
+                  anchors.fill: parent
+                  onClicked:
+                  {
+                    logic.sort(parent.raw)
+                  }
+                  Image
+                  {
+                    visible: logic.sortingColumn !== txt_name.raw ||
+                             (logic.sortingColumn === txt_name.raw &&
+                              logic.sortingDescending)
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    source: "sel_closed.png"
+                    rotation: -90
+                    anchors.margins: 5
+                  }
+                  Image
+                  {
+                    visible: logic.sortingColumn !== txt_name.raw ||
+                             (logic.sortingColumn === txt_name.raw &&
+                              !logic.sortingDescending)
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    source: "sel_closed.png"
+                    rotation: 90
+                    anchors.margins: 5
+                  }
+                }
               }
+              visible: !hiddenField(txt_name.raw)
+            }
+          }
+        }
 
-              TextField
+        Repeater
+        {
+          id: rows_rep
+          model: editor.model.length
+          onModelChanged:
+          {
+            flicky.editKey = ""
+            flicky.editRow = -1
+          }
+
+          Rectangle
+          {
+            id: background
+            color: "lightgrey"
+            property string table: box.tableListIndex
+            onTableChanged: color = "lightgrey"
+            height: row.height+2
+            width: row.width+4
+
+            Row
+            {
+              id: row
+              property int rowIndex: index
+              spacing: 2
+              anchors.centerIn: parent
+              Repeater
               {
-                anchors.fill: parent
-                font.family: "Roboto"
-                font.pixelSize: 16
-                text: editor.model[row.rowIndex][key]
-                onTextChanged:
+                id: cols_rep
+                model: editor.model[0]["entry_hid"] > 0 ? Object.keys(editor.model[0]).length : 0
+
+                delegate: Rectangle
                 {
-                  logic.setTableValue(row.rowIndex, key, text)
+                  property string key: Object.keys(editor.model[0])[index]
+                  property bool isDate: (Object.prototype.toString.call(editor.model[row.rowIndex][key]) === '[object Date]')
+                  property string type: isDate ? "date" : typeof( editor.model[row.rowIndex][key] )
+                  property bool changeable: false //!(key in tableColumnFlags && tableColumnFlags[key].indexOf("function") > -1)
+                  property bool editMode: changeable && flicky.editKey === key && flicky.editRow == row.rowIndex
+                  visible: !hiddenField(key)
+                  width: editor.cellWidth
+                  height: editor.cellHeight
+                  color: "#FFF" //changeable ? "#FFF" : "lightgrey"
+                  border.color: "#AAA"
+                  border.width: 1
+                  clip: true
+                  onKeyChanged:
+                  {
+                    if (key.includes("color"))
+                    {
+                      background.color = editor.model[row.rowIndex][key]
+                    }
+                  }
+
+                  Text
+                  {
+                    id: t_content
+                    anchors.fill: parent
+                    anchors.margins: 5
+                    font.pointSize: 12
+                    color: "#333"
+                    property string content: parent.isDate ? logic.toGermanDateTime(editor.model[row.rowIndex][key], "date") :
+                          editor.model[row.rowIndex][key]
+                    property string linkContent: "<a href=\"" +
+                                                 editor.model[row.rowIndex]["entry_hid"] +
+                                                 "\">" + content + "</a>"
+                    text: key == "__000_name" ? linkContent : content
+                    onLinkActivated:
+                    {
+                      logic.open(link)
+                    }
+                    visible: !parent.editMode
+                  }
+
+                  Loader
+                  {
+                    source: parent.editMode ? "TableEntryForm.qml" : ""
+                    anchors.fill: parent
+                    onLoaded:
+                    {
+                      if (parent.editMode)
+                      {
+                        item.key = parent.key
+                        item.row = row.rowIndex
+                        item.isDate = parent.isDate
+                        item.type = parent.type
+                        item.forceActiveFocus()
+                      }
+                    }
+                  }
                 }
-
-                validator: DoubleValidator
-                {
-
-                }
-
-                visible: parent.type === "number"
-              }
-
-              TextField
-              {
-                anchors.fill: parent
-                font.family: "Roboto"
-                font.pixelSize: 16
-                text: !visible ? "" : logic.toGermanDateTime(editor.model[row.rowIndex][key], "date")
-                onTextChanged:
-                {
-                  logic.setTableValue(row.rowIndex, key, logic.fromGermanDateTime(text, "date"))
-                }
-
-                validator: RegExpValidator {
-                  regExp: /^\s*(3[01]|[12][0-9]|0?[1-9])\.(1[012]|0?[1-9])\.((?:19|20)\d{2})\s*$/
-                }
-
-                visible: parent.type === "date"
               }
             }
           }

@@ -20,11 +20,16 @@ class ManagerLogic : public QObject
   bool m_isAdmin;
   QString table;
   QString searchColumn;
-  QQuickView* view;
+  QQmlApplicationEngine* view;
 
+  QString entryName;
   QVariantMap form;
   QVariantList tableForm;
   QHash<QString, QString> menuEntryOfTable;
+  QVariantMap entryDropdowns;
+  QVariantMap tableDropdowns;
+  QVariantMap columnFlags;
+  QVariantMap tableColumnFlags;
 
   DatabaseHandler databaseHandler;
 
@@ -38,13 +43,23 @@ class ManagerLogic : public QObject
 
   int m_tableListIndex;
 
+  QVariantList fileModel;
+
+  int m_clientCount;
+
+  bool m_clientSelected;
+
+  QString m_sortingColumn;
+
+  bool m_sortingDescending;
+
 public:
 
   QList<QObject*> m_explorerList;
 
   explicit ManagerLogic(QObject *parent = nullptr);
 
-  ManagerLogic(QQuickView* v);
+  ManagerLogic(QQmlApplicationEngine *v);
 
   Q_PROPERTY(QStringList menuModel READ menuModel WRITE setMenuModel NOTIFY menuModelChanged)
   Q_PROPERTY(QStringList tableList READ tableList WRITE setTableList NOTIFY tableListChanged)
@@ -54,6 +69,10 @@ public:
   Q_PROPERTY(QString formtype READ formtype WRITE setFormtype NOTIFY formtypeChanged)
   Q_PROPERTY(bool isAdmin READ isAdmin WRITE setAdmin NOTIFY isAdminChanged)
   Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY filterChanged)
+  Q_PROPERTY(int clientCount READ clientCount WRITE setClientCount NOTIFY clientCountChanged)
+  Q_PROPERTY(bool clientSelected READ clientSelected WRITE setClientSelected NOTIFY clientSelectedChanged)
+  Q_PROPERTY(QString sortingColumn READ sortingColumn WRITE setSortingColumn NOTIFY sortingColumnChanged)
+  Q_PROPERTY(bool sortingDescending READ sortingDescending WRITE setSortingDescending NOTIFY sortingDescendingChanged)
 
   bool loggedIn() const
   {
@@ -70,15 +89,38 @@ public:
 
   bool load();
   void reloadForm();
+  void reloadMenus();
+  void flags2Dropdown(QVariantMap &columnFlags, QVariantMap &dropdowns);
 
   Q_INVOKABLE
   void addClient();
+
+  Q_INVOKABLE
+  void addFile();
+
+  Q_INVOKABLE
+  void addFile(QString url);
+
+  Q_INVOKABLE
+  void setFileName(int index, QString text);
+
+  Q_INVOKABLE
+  void removeFile(int index);
+
+  Q_INVOKABLE
+  void openFile(int index);
+
+  Q_INVOKABLE
+  void removeEntry();
 
   Q_INVOKABLE
   void menuClicked(int menu_index, QString elem);
 
   Q_INVOKABLE
   void setValue(QString name, QVariant value);
+
+  Q_INVOKABLE
+  void saveEntry();
 
   Q_INVOKABLE
   void setTableValue(int rowIndex, QString key, QVariant value);
@@ -111,7 +153,13 @@ public:
   QDateTime fromGermanDateTime(QString text, QString param);
 
   Q_INVOKABLE
+  QString beautifyColumnName(QString column);
+
+  Q_INVOKABLE
   void search(QString text, QString column);
+
+  Q_INVOKABLE
+  void sort(QString column);
 
   QString user() const
   {
@@ -138,6 +186,26 @@ public:
     return m_tableListIndex;
   }
 
+  int clientCount() const
+  {
+    return m_clientCount;
+  }
+
+  bool clientSelected() const
+  {
+    return m_clientSelected;
+  }
+
+  QString sortingColumn() const
+  {
+    return m_sortingColumn;
+  }
+
+  bool sortingDescending() const
+  {
+    return m_sortingDescending;
+  }
+
 signals:
 
   void loggedInChanged(bool loggedIn);
@@ -146,7 +214,7 @@ signals:
 
   void userChanged(QString user);
 
-  void messageBox(QString mode, QStringList params);
+  void dialog(QString mode, QStringList params);
 
   void filterChanged(QString filter);
 
@@ -155,6 +223,14 @@ signals:
   void tableListChanged(QStringList tableList);
 
   void tableListIndexChanged(int tableListIndex);
+
+  void clientCountChanged(int clientCount);
+
+  void clientSelectedChanged(bool clientSelected);
+
+  void sortingColumnChanged(QString sortingColumn);
+
+  void sortingDescendingChanged(bool sortingDescending);
 
 public slots:
   void setLoggedIn(bool loggedIn)
@@ -216,6 +292,38 @@ public slots:
   {
     m_tableListIndex = tableListIndex;
     emit tableListIndexChanged(m_tableListIndex);
+  }
+  void setClientCount(int clientCount)
+  {
+    if (m_clientCount == clientCount)
+      return;
+
+    m_clientCount = clientCount;
+    emit clientCountChanged(m_clientCount);
+  }
+  void setClientSelected(bool clientSelected)
+  {
+    if (m_clientSelected == clientSelected)
+      return;
+
+    m_clientSelected = clientSelected;
+    emit clientSelectedChanged(m_clientSelected);
+  }
+  void setSortingColumn(QString sortingColumn)
+  {
+    if (m_sortingColumn == sortingColumn)
+      return;
+
+    m_sortingColumn = sortingColumn;
+    emit sortingColumnChanged(m_sortingColumn);
+  }
+  void setSortingDescending(bool sortingDescending)
+  {
+    if (m_sortingDescending == sortingDescending)
+      return;
+
+    m_sortingDescending = sortingDescending;
+    emit sortingDescendingChanged(m_sortingDescending);
   }
 };
 

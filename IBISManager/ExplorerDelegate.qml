@@ -11,6 +11,7 @@ MouseArea
   property int treeLayer: 0
   property bool leaf: false
   property int hid: 0
+  property string lfnr: ""
 
   id: area
 
@@ -89,7 +90,7 @@ MouseArea
   Text
   {
     id: content
-    text: descText
+    text: lfnr === "" ? descText : "#" + lfnr + " " + descText
 
     anchors.left: semanticIcon.right
     anchors.leftMargin: 10

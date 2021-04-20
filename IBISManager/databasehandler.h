@@ -12,6 +12,8 @@ class DatabaseHandler
 {
     QSqlQuery query;
     QSqlQuery metaQuery;
+    QSqlDatabase db;
+    QSqlDatabase metadb;
     QVariantMap hierarchyBlueprint;
     QMap<QString, QVariantMap> tableBlueprints;
 
@@ -30,20 +32,30 @@ public:
 
     DatabaseHandler();
 
+    void close();
+
     bool initDatabase();
     bool initMetaDatabase();
 
+    static bool removeAllDatabases();
+
     // Meta stuff
+    bool addDropDown(QString name, QList<QString> entries);
+    bool getDropDown(QString name, QList<QString> &entries);
     bool blueprintAdd(QString table, QString column, QVariant::Type type, QVariant def);
     bool flagAdd(QString table, QString column, QStringList flags);
     bool blueprintRemove(QString table, QString column);
     bool blueprintSetDefault(QString table, QString column, QVariant def);
-    bool metaAdd(QString meta, QString getter_sql, QString setter_sql);
-    bool metaSet(QString meta, QString getter_sql, QString setter_sql);
-    bool metaRemove(QString meta);
-    QVariant callMetaGetter(QString meta, QString column, QVariantMap makros);
-    bool callMetaSetter(QString meta, QString column, QVariant value, QVariantMap makros);
-    bool getColumnFlags(QString table, QString column, QStringList &flags);
+    bool metaAdd(QString table, QString script_sql);
+    bool metaSet(QString table, QString script_sql);
+    bool metaRemove(QString table);
+    bool callMeta(QString meta, QVariantMap makros);
+    bool getFlags(QString table, QString column, QStringList &flags);
+    bool addBinding(QString from_table, QString from_column, QString to_table);
+    bool removeBinding(QString from_table, QString from_column, QString to_table);
+    bool getBindings(QString from_table, QString from_column, QStringList& to_tables);
+    bool getRelatedEntries(int hid, QMap<QString, QList<int>> &related);
+    bool resolveBindings(int hid, QString table, QStringList changedColumns);
 
     // User and client management
     bool userLogin(QString username, QString password);
@@ -76,6 +88,8 @@ public:
     bool getForcedDirection(QString table, QList<QString>& result);
 
     bool search(QString table, QVariantMap base_filter, QVariantMap filter, QVariantList &result);
+
+    bool getFileList(int hid, QVariantList& fileList);
 
     QString detectTable(QStringList columns);
 };

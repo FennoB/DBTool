@@ -14,6 +14,7 @@ Item
     anchors.left: parent.left
     anchors.top: parent.top
     anchors.topMargin: 100
+    color: "#FFFFFF"
 
     text: "Willkommen."
     font.pixelSize: 20

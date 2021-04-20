@@ -14,5 +14,6 @@
         <file>RegisterView.qml</file>
         <file>EntryEditor.qml</file>
         <file>TableEditor.qml</file>
+        <file>TableEntryForm.qml</file>
     </qresource>
 </RCC>

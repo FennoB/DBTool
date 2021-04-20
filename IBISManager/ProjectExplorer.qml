@@ -7,17 +7,14 @@ Rectangle
 
   border.color: "#333333"
   border.width: 3
-  radius: 5
   color: "white"
 
-  Rectangle
+  Item
   {
     id: caption
-    color: "#888888"
     width: parent.width
     height: 20
     y: -20
-    radius: 3
 
     Rectangle
     {
@@ -30,7 +27,7 @@ Rectangle
         anchors.leftMargin: 20
         anchors.left: parent.left
         color: "white"
-        text: "Projekte"
+        text: "Kunden"
         font.family: "Roboto"
         font.pixelSize: 14
       }
@@ -56,6 +53,7 @@ Rectangle
       toggled: _open
       hid: _hid
       leaf: index + 1 === explorerList.length || explorerList[index+1]._layer <= _layer
+      lfnr: _lfnr
     }
   }
 

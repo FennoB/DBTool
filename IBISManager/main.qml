@@ -13,7 +13,7 @@ ApplicationWindow
   minimumHeight: 450
 
   title: qsTr("IBIS Manager")
-  color: "#96C896"
+  color: "#444444"
 
   Loader
   {

@@ -25,14 +25,27 @@ Item
   Row
   {
     id: menuBar
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.margins: 3
 
     Button
     {
       id: b_new
-      text: "Neu..."
       height: root.height / 30
+      width: 100
+      background:
+      Rectangle
+      {
+        color: !parent.open ? "#555555" : "#333333"
+      }
 
-      onClicked: open ? open=false : open=true
+      text: "<font color='#ffffff'>" + "Import/Export" + "</font>"
+
+      onClicked:
+      {
+        open ? open=false : open=true
+      }
       property bool open: false
       onOpenChanged:
       {
@@ -42,48 +55,30 @@ Item
       Menu
       {
         id: m_new
-        title: "Neu"
+        title: "Import/Export"
         y: parent.height
 
+        onClosed: parent.clicked()
         MenuItem
         {
-          text: "Kunde"
+          text: "Werte aus Excel übernehmen "
           onTriggered:
           {
+            fileDialog.method = "entry"
+            fileDialog.open()
             b_new.open = false
-            logic.addClient()
-          }
-        }
-
-        Repeater
-        {
-          model: logic.menuModel
-          MenuItem
-          {
-            text: modelData
-            onTriggered:
-            {
-              b_new.open = false
-              logic.menuClicked(0, modelData)
-            }
           }
         }
 
         MenuItem
         {
-          text: "Benutzer"
+          text: "Untereinträge aus Excel übernehmen"
           onTriggered:
           {
-            regView.visible = true
-            mainContent.visible = false
+            fileDialog.method = "subentries"
+            fileDialog.open()
+            b_new.open = false
           }
-        }
-
-        MenuSeparator { }
-        MenuItem
-        {
-          text: qsTr("Schließen")
-          onTriggered: Qt.quit()
         }
       }
     }
@@ -91,34 +86,109 @@ Item
     Button
     {
       id: b_entry
+      background:
+      Rectangle
+      {
+        color: !parent.open ? "#555555" : "#333333"
+      }
 
-      text: "Eintrag"
+      text: "<font color='#ffffff'>" + "Eintrag" + "</font>"
+
       height: root.height / 30
+      width: 100
 
-      onClicked: m_entry.open()
+      onClicked: open = !open
+      property bool open: false
+      onOpenChanged:
+      {
+        open ? m_entry.open() : m_entry.close()
+      }
 
       Menu
       {
         y: parent.height
         id: m_entry
         title: "Eintrag"
-        MenuItem
+
+        onClosed: parent.clicked()
+
+        Repeater
         {
-          text: "Werte importieren"
-          onTriggered:
+          model: logic.menuModel
+          MenuItem
           {
-            fileDialog.method = "entry"
-            fileDialog.open()
+            text: modelData + " hinzufügen"
+            onTriggered:
+            {
+              b_entry.open = false
+              logic.menuClicked(0, modelData)
+            }
           }
         }
 
         MenuItem
         {
-          text: "Untereinträge importieren"
+          text: "Diesen Eintrag löschen"
+          enabled: logic.clientCount > 1 || !logic.clientSelected
           onTriggered:
           {
-            fileDialog.method = "subentries"
-            fileDialog.open()
+            messagebox.icon = StandardIcon.Critical
+            messagebox.standardButtons = StandardButton.Yes | StandardButton.No
+            messagebox.title = "Löschen bestätigen"
+            messagebox.text = "Diesen Eintrag wirklich löschen? \nAlle Untereinträge werden ebenfalls gelöscht."
+            messagebox.visible = true
+            messagebox.method = "removeEntry"
+            b_entry.open = false
+          }
+        }
+      }
+    }
+
+    Button
+    {
+      id: b_manage
+      background:
+      Rectangle
+      {
+        color: !parent.open ? "#555555" : "#333333"
+      }
+
+      text: "<font color='#ffffff'>" + "Verwalten" + "</font>"
+      height: root.height / 30
+      width: 100
+
+      onClicked: open ? open=false : open=true
+      property bool open: false
+      onOpenChanged:
+      {
+        open ? m_manage.open() : m_manage.close()
+      }
+
+      Menu
+      {
+        y: parent.height
+        id: m_manage
+        title: "Verwalten"
+
+        onClosed: parent.clicked()
+        MenuItem
+        {
+          text: "Neuer Kunde"
+          onTriggered:
+          {
+            b_manage.open = false
+            logic.addClient()
+          }
+        }
+
+        MenuItem
+        {
+          text: "Neuer Benutzer"
+          onTriggered:
+          {
+            b_manage.open = false
+            regView.visible = true
+            mainContent.visible = false
           }
         }
       }
@@ -133,6 +203,7 @@ Item
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
+    anchors.margins: 3
 
     ProjectExplorer
     {
@@ -141,15 +212,14 @@ Item
       id: expl
     }
 
-    Rectangle
+    Item
     {
       id: tabbar
       anchors.top: parent.top
       anchors.left: expl.right
       anchors.right: parent.right
+      anchors.leftMargin: 3
       height: 20
-      radius: 3
-      color: "#888888"
 
       Row
       {
@@ -229,6 +299,7 @@ Item
       anchors.left: expl.right
       anchors.bottom: parent.bottom
       anchors.right: parent.right
+      anchors.leftMargin: 3
     }
 
     TableEditor
@@ -249,7 +320,7 @@ Item
     anchors.fill: parent
     visible: false
 
-    onRegister:
+    onClose:
     {
       regView.visible = false
       mainContent.visible = true
@@ -261,7 +332,7 @@ Item
     id: fileDialog
     property string method: ""
     title: "Datei wählen"
-    nameFilters: [ "CSV Tabelle (*.csv)", "Andere Datei (*)" ]
+    nameFilters: method === "entry" || method === "subentries" ? [ "CSV Tabelle (*.csv)", "Andere Datei (*)" ] : [ "PDF-Dokument (*.pdf)", "Andere Datei (*)"]
     folder: shortcuts.home
     onAccepted:
     {
@@ -273,7 +344,10 @@ Item
       {
         logic.csvSubentriesImport(fileUrl)
       }
-
+      else if (method == "addfile")
+      {
+        logic.addFile(fileUrl)
+      }
     }
 
     onRejected:
@@ -289,18 +363,37 @@ Item
     height: 200
     icon: StandardIcon.Critical
     text: ""
-    //detailedText: "To replace a file means that its existing contents will be lost. " +
-    //              "The file that you are copying now will be copied over it instead."
+    property string method: "info"
 
-    //onAccepted: dialog.open()
-    //onNo: console.log("didn't copy")
-    //onRejected: console.log("aborted")
+    onAccepted:
+    {
+      if (method == "removeEntry")
+      {
+        logic.removeEntry()
+      }
+    }
+
+    onYes:
+    {
+      if (method == "removeEntry")
+      {
+        logic.removeEntry()
+      }
+    }
+
+    onNo:
+    {
+    }
+
+    onRejected:
+    {
+    }
   }
 
   Connections
   {
     target: logic
-    onMessageBox:
+    onDialog:
     {
       if (mode == "error")
       {
@@ -309,6 +402,12 @@ Item
         messagebox.title = params[0]
         messagebox.text = params[1]
         messagebox.visible = true
+      }
+
+      if (mode == "addfile")
+      {
+        fileDialog.method = mode
+        fileDialog.open()
       }
     }
   }
