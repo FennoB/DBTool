@@ -896,11 +896,18 @@ bool DatabaseHandler::addSubEntry(QString table, QVariantMap& data, QString name
   }
 
   entryHierarchy["depth"] = depth;
-  result = result && addEntry("hierarchy", entryHierarchy);
+  result &= addEntry("hierarchy", entryHierarchy);
   int hid = entryHierarchy["id"].toInt();
 
   data["entry_hid"] = hid;
-  return result && setEntry(table, id, data);
+  result &= setEntry(table, id, data);
+
+  QVariantMap makros;
+  makros[":hid"] = hid;
+  callMeta(table, makros);
+
+  result &= resolveBindings(hid, table, data.keys());
+  return result;
 }
 
 bool DatabaseHandler::removeSubEntry(int hid)
@@ -950,18 +957,7 @@ bool DatabaseHandler::setSubEntry(int hid, QVariantMap entry)
   QVariantMap h_entry;
   getSubEntryBase(hid, h_entry);
   QString table = h_entry["entry_table"].toString();
-  QVariantMap oldEntry = getEmptyTable(table);
-  getEntry(table, h_entry["entry_id"].toInt(), oldEntry);
-
-  QStringList updated;
-  for (auto i = entry.begin(); i != entry.end(); ++i)
-  {
-    if (i.value() != oldEntry[i.key()])
-    {
-      updated.append(i.key());
-    }
-  }
-
+  QStringList updated = getUpdated(table, entry);
   if(!setEntry(table, h_entry["entry_id"].toInt(), entry))
   {
     return false;
@@ -976,8 +972,29 @@ bool DatabaseHandler::getSubEntryBase(int hid, QVariantMap &base)
 }
 
 bool DatabaseHandler::setSubEntryBase(int hid, QVariantMap base)
+{  
+  QStringList updated = getUpdated("hierarchy", base);
+  if (!setEntry("hierarchy", hid, base))
+  {
+    return false;
+  }
+  return resolveBindings(hid, base["entry_table"].toString(), updated);
+}
+
+QStringList DatabaseHandler::getUpdated(QString table, QVariantMap entry)
 {
-  return setEntry("hierarchy", hid, base);
+  QStringList updated;
+  QVariantMap oldEntry = getEmptyTable(table);
+  getEntry("hierarchy", entry["id"].toInt(), oldEntry);
+
+  for (auto i = entry.begin(); i != entry.end(); ++i)
+  {
+    if (i.value() != oldEntry[i.key()])
+    {
+      updated.append(i.key());
+    }
+  }
+  return updated;
 }
 
 bool DatabaseHandler::getForcedDirection(QString table, QList<QString> &result)

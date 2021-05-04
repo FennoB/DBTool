@@ -84,6 +84,7 @@ public:
     bool setSubEntry(int hid, QVariantMap entry);
     bool getSubEntryBase(int hid, QVariantMap& base);
     bool setSubEntryBase(int hid, QVariantMap base);
+    QStringList getUpdated(QString table, QVariantMap entry);
 
     bool getForcedDirection(QString table, QList<QString>& result);
 

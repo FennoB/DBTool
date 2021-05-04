@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
   db.blueprintAdd("system", "id"        ,   QVariant::Int,    0);
   db.blueprintAdd("system", "entry_hid" ,   QVariant::Int,    0);
   db.blueprintAdd("system", "__001_halle"   ,   QVariant::String, "");
-  db.blueprintAdd("system", "__002_volumen"   ,   QVariant::Double, "");
+  db.blueprintAdd("system", "__002_volumen"   ,   QVariant::Double, 0.0);
   db.blueprintAdd("system", "__003_wgk"       ,   QVariant::String, "");
   db.blueprintAdd("system", "__004_gefstufe"  ,   QVariant::String, "");
   db.blueprintAdd("system", "__005_wsgeb"     ,   QVariant::String, "");
@@ -52,12 +52,61 @@ int main(int argc, char *argv[])
   db.blueprintAdd("subsystem", "__002_art"      , QVariant::String, "" );
   db.blueprintAdd("subsystem", "__003_datum"    , QVariant::Date  , QDate::currentDate());
 
-  db.blueprintAdd("container", "id"       , QVariant::Int   , 0 );
+  db.blueprintAdd("container", "id", QVariant::Int, 0 );
   db.blueprintAdd("container", "entry_hid", QVariant::Int   , 0 );
-  db.blueprintAdd("container", "__001_volumen"  , QVariant::Double, 0);
-  db.blueprintAdd("container", "__002_volaktiv" , QVariant::String, "");
-  db.blueprintAdd("container", "__003_wgk"      , QVariant::String   , "nwg" );
+  db.blueprintAdd("container", "__001_volumen", QVariant::Double, 0.0);
+  db.blueprintAdd("container", "__002_stoff", QVariant::String, "");
+  db.blueprintAdd("container", "__003_wgk", QVariant::String, "nwg" );
   db.blueprintAdd("container", "__004_unterirdisch", QVariant::String, "");
+  db.blueprintAdd("container", "__005_stoffeingang", QVariant::String, "");
+  db.blueprintAdd("container", "__006_stoffausgang", QVariant::String, "");
+  db.blueprintAdd("container", "__007_erforderliches_r", QVariant::Double, 0);
+  db.blueprintAdd("container", "__200_r_vorhanden", QVariant::String, "Nein");
+     db.blueprintAdd("container", "__201_vorhandenes_r", QVariant::Double, 0);
+     db.blueprintAdd("container", "__202_art", QVariant::String, "");
+     db.blueprintAdd("container", "__203_details", QVariant::String, "");
+     db.blueprintAdd("container", "__204_einstufung_trws_786", QVariant::String, "Staufläche");
+  db.blueprintAdd("container", "__300_ueberfuellsicherung", QVariant::String, "Nein");
+     db.blueprintAdd("container", "__301_hersteller", QVariant::String, "");
+     db.blueprintAdd("container", "__302_modell", QVariant::String, "");
+     db.blueprintAdd("container", "__303_zulassung", QVariant::String, "");
+     db.blueprintAdd("container", "__304_schaltfunktion", QVariant::String, "");
+     db.blueprintAdd("container", "__305_alarmmeldeort", QVariant::String, "");
+     db.blueprintAdd("container", "__306_schaltfunktion", QVariant::String, "");
+  db.blueprintAdd("container", "__400_leckagesonde", QVariant::String, "Nein");
+     db.blueprintAdd("container", "__401_hersteller", QVariant::String, "");
+     db.blueprintAdd("container", "__402_modell", QVariant::String, "");
+     db.blueprintAdd("container", "__403_zulassung", QVariant::String, "");
+     db.blueprintAdd("container", "__404_schaltfunktion", QVariant::String, "");
+     db.blueprintAdd("container", "__405_alarmmeldeort", QVariant::String, "");
+     db.blueprintAdd("container", "__406_schaltfunktion", QVariant::String, "");
+  db.blueprintAdd("container", "__999_bemerkungen", QVariant::String, "");
+
+  /*
+  Behälter:
+- Stoff (Auswahl Rigoletto)
+- Erforderliches R zahl
+  - Gemäß text
+- R vorhanden? (Ja, Nein)
+  - Vorhandenes R zahl
+  - Art der Rückhaltung (Dropdown)
+  - Details der Rückhaltung (Einzeiler)
+  - Einstufung nach TRwS 786 (Dropdown Staufläche, Ablauffläche, Tiefpunkt)
+- Überfüllsicherung (Ja, Nein?)
+  - Hersteller
+  - Modell
+  - Zulassung
+  - Schaltfunktion
+  - Alarmmeldeort
+- Leckagesonde
+  - Hersteller
+  - Modell
+  - Zulassung
+  - Schaltfunktion
+  - Alarmmeldeort
+- Stoffeingang Einzeiler
+- Stoffausgang Einzeiler
+  */
 
   db = DatabaseHandler();
 
@@ -68,6 +117,9 @@ int main(int argc, char *argv[])
 
   db.flagAdd("container", "__003_wgk", {"dropdown.wgk"});
   db.flagAdd("container", "__004_unterirdisch", {"dropdown.yesno"});
+  db.flagAdd("container", "__200_r_vorhanden", {"dropdown.yesno"});
+  db.flagAdd("container", "__300_ueberfuellsicherung", {"dropdown.yesno"});
+  db.flagAdd("container", "__400_leckagesonde", {"dropdown.yesno"});
 
   db.flagAdd("system", "__001_halle", {"function"});
   db.flagAdd("system", "__002_volumen", {"function"});
@@ -77,6 +129,7 @@ int main(int argc, char *argv[])
 
   db.flagAdd("subsystem", "__001_volumen", {"function"});
 
+  db.addBinding("building", "name", "system");
   db.addBinding("container", "__001_volumen", "system");
   db.addBinding("container", "__001_volumen", "subsystem");
   db.addBinding("container", "__003_wgk", "system");
@@ -94,5 +147,5 @@ int main(int argc, char *argv[])
   system("move /y ibis_db.sqlite3 ../build-IBISManager-Desktop_Qt_5_15_2_MinGW_64_bit-Debug/ibis_db.sqlite3");
   system("move /y ibis_meta.sqlite3 ../build-IBISManager-Desktop_Qt_5_15_2_MinGW_64_bit-Debug/ibis_meta.sqlite3");
 
-  return a.exec();
+  return 0;
 }

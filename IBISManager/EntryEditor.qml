@@ -97,6 +97,15 @@ Rectangle
         property string text: isDate ? logic.toGermanDateTime(content, "date") : content
         property string type: isDate ? "date" : typeof(content)
         property bool changeable: editor.editing && !(key in columnFlags && columnFlags[key].indexOf("function") > -1)
+        property int cid: parseInt(key.substr(2, 3))
+
+        Item
+        {
+          id: pusher
+          width: visible ? 30 : 0
+          height: 10
+          visible: rw.cid >= 100 && rw.cid % 100 != 0 && rw.cid != 999
+        }
 
         Text
         {
@@ -110,7 +119,7 @@ Rectangle
 
         Rectangle
         {
-          width: 300
+          width: 300 - pusher.width
           height: 30
           border.color: "darkgrey"
           color: "lightgrey"
@@ -131,7 +140,7 @@ Rectangle
         {
           font.family: "Roboto"
           font.pixelSize: 12
-          width: 300
+          width: 300 - pusher.width
           height: 30
           property string content: rw.text
           text: content
@@ -168,7 +177,7 @@ Rectangle
           id: combo
           font.family: "Roboto"
           font.pixelSize: 12
-          width: 300
+          width: 300 - pusher.width
           height: 30
 
           visible: entryDropdowns[rw.key] !== undefined && entryDropdowns[rw.key] !== null && parent.changeable

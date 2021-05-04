@@ -363,6 +363,7 @@ void ManagerLogic::setValue(QString name, QVariant value)
     return;
   }
 
+  value.convert(form[name].type());
   form[name] = value;
 }
 
@@ -616,9 +617,15 @@ QString ManagerLogic::beautifyColumnName(QString column)
   {
     if (i->size())
     {
-      res += i->left(1).toUpper() + i->mid(1) + " ";
+      res += i->at(0).toUpper() + i->mid(1) + " ";
     }
   }
+  //res.replace("Ae", "Ä")
+  //    .replace("Oe", "Ö")
+  //    .replace("Ue", "Ü")
+  //    .replace("ae", "ä")
+  //    .replace("oe", "ö")
+  //    .replace("ue", "ü");
   return res;
 }
 
